@@ -1,0 +1,20 @@
+# Ignore build outputs
+bin/
+obj/
+
+# Ignore user-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Ignore Rider IDE files
+.idea/
+*.sln.iml
+
+# Ignore other unnecessary files
+.vscode/
+.DS_Store
+
+# Ignore JetBrains Rider user settings
+*.DotSettings.user

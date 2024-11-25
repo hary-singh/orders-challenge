@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapse.Orders", "Synapse.Orders\Synapse.Orders.csproj", "{BB4FAFF6-6649-4351-94F5-CE35FD615149}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapse.Orders.Tests", "Synapse.Orders.Tests\Synapse.Orders.Tests.csproj", "{2A89762C-786E-4C51-905E-8BA39AA2950B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BB4FAFF6-6649-4351-94F5-CE35FD615149}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BB4FAFF6-6649-4351-94F5-CE35FD615149}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BB4FAFF6-6649-4351-94F5-CE35FD615149}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BB4FAFF6-6649-4351-94F5-CE35FD615149}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2A89762C-786E-4C51-905E-8BA39AA2950B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2A89762C-786E-4C51-905E-8BA39AA2950B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2A89762C-786E-4C51-905E-8BA39AA2950B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2A89762C-786E-4C51-905E-8BA39AA2950B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
