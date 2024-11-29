@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System.Text;
 using Newtonsoft.Json;
+using Synapse.Orders.Models;
 
 namespace Synapse.Orders
 {
@@ -41,9 +42,9 @@ namespace Synapse.Orders
         /// Fetches medical equipment orders from the API.
         /// </summary>
         /// <returns>An array of orders.</returns>
-        public async Task<JObject[]> FetchMedicalEquipmentOrders()
+        public async Task<Order[]> FetchMedicalEquipmentOrders()
         {
-            var orders = new List<JObject>();
+            var orders = new List<Order>();
             var httpClient = _httpClientFactory.CreateClient();
             var nextPageUrl = _ordersApiUrl;
 
@@ -54,21 +55,17 @@ namespace Synapse.Orders
                     var response = await httpClient.GetAsync(nextPageUrl);
                     response.EnsureSuccessStatusCode();
 
-                    await using (var stream = await response.Content.ReadAsStreamAsync())
-                    using (var reader = new StreamReader(stream))
-                    await using (var jsonReader = new JsonTextReader(reader))
-                    {
-                        var json = await JToken.ReadFromAsync(jsonReader);
-                        var ordersArray = json["orders"]?.ToObject<JObject[]>() ?? Array.Empty<JObject>();
-                        orders.AddRange(ordersArray);
+                    var json = await response.Content.ReadAsStringAsync();
+                    var jsonObject = JObject.Parse(json);
+                    var ordersArray = jsonObject["orders"]?.ToObject<Order[]>() ?? Array.Empty<Order>();
+                    orders.AddRange(ordersArray);
 
-                        nextPageUrl = json["nextPageUrl"]?.ToString();
-                    }
+                    nextPageUrl = jsonObject["nextPageUrl"]?.ToString();
                 }
                 catch (HttpRequestException ex)
                 {
                     _logger.LogError(ex, "Failed to fetch orders from API.");
-                    break;
+                    throw; // Rethrow the exception to stop processing
                 }
             }
 
@@ -80,42 +77,32 @@ namespace Synapse.Orders
         /// </summary>
         /// <param name="order">The order to process.</param>
         /// <returns>The processed order.</returns>
-        public async Task<JObject> ProcessOrder(JObject order)
+        public async Task<Order> ProcessOrder(Order order)
         {
             try
             {
-                var items = order["Items"]?.ToObject<JArray>();
-                if (items == null)
+                if (order.Items == null)
                 {
-                    _logger.LogInformation("Order {OrderId} does not contain any items.", order["OrderId"]);
+                    _logger.LogInformation("Order {OrderId} does not contain any items.", order.OrderId);
                     return order;
                 }
 
-                foreach (var item in items)
+                foreach (var item in order.Items)
                 {
                     if (!IsItemDelivered(item))
                     {
                         continue;
                     }
 
-                    var orderId = order["OrderId"]?.ToString();
-                    if (orderId == null)
-                    {
-                        continue;
-                    }
-
-                    await SendAlertMessage(item, orderId);
+                    await SendAlertMessage(item, order.OrderId);
                     IncrementDeliveryNotification(item);
                 }
-
-                // Update the order with the modified items
-                order["Items"] = items;
 
                 return order;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "An error occurred while processing the order {OrderId}.", order["OrderId"]);
+                _logger.LogError(ex, "An error occurred while processing the order {OrderId}.", order.OrderId);
                 throw;
             }
         }
@@ -125,9 +112,9 @@ namespace Synapse.Orders
         /// </summary>
         /// <param name="item">The item to check.</param>
         /// <returns><c>true</c> if the item is delivered; otherwise, <c>false</c>.</returns>
-        public static bool IsItemDelivered(JToken item)
+        public static bool IsItemDelivered(Item item)
         {
-            return item["Status"]?.ToString().Equals("Delivered", StringComparison.OrdinalIgnoreCase) ?? false;
+            return item.Status == ItemStatus.Delivered;
         }
 
         /// <summary>
@@ -135,15 +122,14 @@ namespace Synapse.Orders
         /// </summary>
         /// <param name="item">The delivered item.</param>
         /// <param name="orderId">The order ID.</param>
-        private async Task SendAlertMessage(JToken item, string orderId)
+        private async Task SendAlertMessage(Item item, string orderId)
         {
             var alertData = new
             {
-                Message = $"Alert for delivered item: Order {orderId}, Item: {item["Description"]}, " +
-                          $"Delivery Notifications: {item["deliveryNotification"]}"
+                Message = $"Alert for delivered item: Order {orderId}, Item: {item.Description}, " +
+                          $"Delivery Notifications: {item.DeliveryNotification}"
             };
-            var content = new StringContent(JObject.FromObject(alertData).ToString(), Encoding.UTF8,
-                "application/json");
+            var content = new StringContent(JsonConvert.SerializeObject(alertData), Encoding.UTF8, "application/json");
 
             try
             {
@@ -151,11 +137,11 @@ namespace Synapse.Orders
                 var response = await httpClient.PostAsync(_alertApiUrl, content);
                 response.EnsureSuccessStatusCode();
 
-                _logger.LogInformation("Alert sent for delivered item: {Description}", item["Description"]);
+                _logger.LogInformation("Alert sent for delivered item: {Description}", item.Description);
             }
             catch (HttpRequestException ex)
             {
-                _logger.LogError(ex, "Failed to send alert for delivered item: {Description}", item["Description"]);
+                _logger.LogError(ex, "Failed to send alert for delivered item: {Description}", item.Description);
             }
         }
 
@@ -163,18 +149,18 @@ namespace Synapse.Orders
         /// Increments the delivery notification count for the item.
         /// </summary>
         /// <param name="item">The item to update.</param>
-        private static void IncrementDeliveryNotification(JToken item)
+        private static void IncrementDeliveryNotification(Item item)
         {
-            item["deliveryNotification"] = (item["deliveryNotification"]?.Value<int>() ?? 0) + 1;
+            item.DeliveryNotification++;
         }
 
         /// <summary>
         /// Sends an alert and updates the order.
         /// </summary>
         /// <param name="order">The order to update.</param>
-        public async Task SendAlertAndUpdateOrder(JObject order)
+        public async Task SendAlertAndUpdateOrder(Order order)
         {
-            var content = new StringContent(order.ToString(), Encoding.UTF8, "application/json");
+            var content = new StringContent(JsonConvert.SerializeObject(order), Encoding.UTF8, "application/json");
 
             try
             {
@@ -182,11 +168,11 @@ namespace Synapse.Orders
                 var response = await httpClient.PostAsync(_updateApiUrl, content);
                 response.EnsureSuccessStatusCode();
 
-                _logger.LogInformation("Updated order sent for processing: {OrderId}", order["OrderId"]);
+                _logger.LogInformation("Updated order sent for processing: {OrderId}", order.OrderId);
             }
             catch (HttpRequestException ex)
             {
-                _logger.LogError(ex, "Failed to send updated order for processing: {OrderId}", order["OrderId"]);
+                _logger.LogError(ex, "Failed to send updated order for processing: {OrderId}", order.OrderId);
             }
         }
     }

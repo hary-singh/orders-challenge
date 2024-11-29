@@ -3,7 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Protected;
-using Newtonsoft.Json.Linq;
+using Synapse.Orders.Models;
 
 namespace Synapse.Orders.Tests
 {
@@ -19,8 +19,7 @@ namespace Synapse.Orders.Tests
             _httpClientFactoryMock = new Mock<IHttpClientFactory>();
             _loggerMock = new Mock<ILogger<OrderService>>();
             _configurationMock = new Mock<IConfiguration>();
-            _orderService = new OrderService(_httpClientFactoryMock.Object, _loggerMock.Object,
-                _configurationMock.Object);
+            _orderService = new OrderService(_httpClientFactoryMock.Object, _loggerMock.Object, _configurationMock.Object);
         }
 
         private void SetupHttpClient(HttpStatusCode statusCode, string content)
@@ -46,11 +45,11 @@ namespace Synapse.Orders.Tests
         }
 
         [Theory]
-        [InlineData("Delivered", true)]
-        [InlineData("Pending", false)]
-        public void Test_IsItemDelivered(string status, bool expected)
+        [InlineData(ItemStatus.Delivered, true)]
+        [InlineData(ItemStatus.Pending, false)]
+        public void Test_IsItemDelivered(ItemStatus status, bool expected)
         {
-            var item = new JObject { ["Status"] = status };
+            var item = new Item { Status = status, Description = "Test Item" };
             var result = OrderService.IsItemDelivered(item);
             Assert.Equal(expected, result);
         }
@@ -63,7 +62,7 @@ namespace Synapse.Orders.Tests
             var result = await _orderService.FetchMedicalEquipmentOrders();
 
             Assert.Single(result);
-            Assert.Equal("1", result[0]?["OrderId"]?.ToString() ?? string.Empty);
+            Assert.Equal("1", result[0].OrderId);
         }
 
         [Fact]
@@ -71,24 +70,23 @@ namespace Synapse.Orders.Tests
         {
             SetupHttpClient(HttpStatusCode.BadRequest, "");
 
-            var result = await _orderService.FetchMedicalEquipmentOrders();
-
-            Assert.Empty(result);
+            await Assert.ThrowsAsync<HttpRequestException>(async () => 
+                await _orderService.FetchMedicalEquipmentOrders());
         }
 
         [Fact]
         public async Task Test_ProcessOrder_ProcessesDeliveredItems()
         {
-            var order = new JObject
+            var order = new Order
             {
-                ["OrderId"] = "1",
-                ["Items"] = new JArray
+                OrderId = "1",
+                Items = new List<Item>
                 {
-                    new JObject
+                    new Item
                     {
-                        ["Status"] = "Delivered",
-                        ["Description"] = "Item1",
-                        ["deliveryNotification"] = 0
+                        Status = ItemStatus.Delivered,
+                        Description = "Item1",
+                        DeliveryNotification = 0
                     }
                 }
             };
@@ -98,9 +96,7 @@ namespace Synapse.Orders.Tests
             var result = await _orderService.ProcessOrder(order);
 
             Assert.NotNull(result);
-
-            var items = result["Items"]?.ToObject<JArray>() ?? new JArray();
-            Assert.Equal(1, items[0]?["deliveryNotification"]?.Value<int>() ?? 0);
+            Assert.Equal(1, result.Items[0].DeliveryNotification);
         }
 
         [Fact]
@@ -108,7 +104,7 @@ namespace Synapse.Orders.Tests
         {
             SetupHttpClient(HttpStatusCode.OK, "");
 
-            var order = new JObject { ["OrderId"] = "1", ["Items"] = new JArray() };
+            var order = new Order { OrderId = "1", Items = new List<Item>() };
 
             await _orderService.SendAlertAndUpdateOrder(order);
 
@@ -129,7 +125,7 @@ namespace Synapse.Orders.Tests
         {
             SetupHttpClient(HttpStatusCode.BadRequest, "");
 
-            var order = new JObject { ["OrderId"] = "1", ["Items"] = new JArray() };
+            var order = new Order { OrderId = "1", Items = new List<Item>() };
 
             await _orderService.SendAlertAndUpdateOrder(order);
 
@@ -137,7 +133,7 @@ namespace Synapse.Orders.Tests
                 x => x.Log(
                     LogLevel.Error,
                     It.IsAny<EventId>(),
-                    It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Failed to send updated order for processing")),
+                    It.Is<It.IsAnyType>((v, t) => v != null && v.ToString().Contains("Failed to send updated order for processing")),
                     It.IsAny<Exception>(),
                     It.IsAny<Func<It.IsAnyType, Exception, string>>()
                 ),
