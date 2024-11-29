@@ -1,11 +1,11 @@
-using Newtonsoft.Json.Linq;
+using Synapse.Orders.Models;
 
 namespace Synapse.Orders
 {
     public interface IOrderService
     {
-        Task<JObject[]> FetchMedicalEquipmentOrders();
-        Task<JObject> ProcessOrder(JObject order);
-        Task SendAlertAndUpdateOrder(JObject order);
+        Task<Order[]> FetchMedicalEquipmentOrders();
+        Task<Order> ProcessOrder(Order order);
+        Task SendAlertAndUpdateOrder(Order order);
     }
 }
